@@ -12,7 +12,8 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum');
 
 
-// Rotas públicas
+// Rotas públicas - 
+# CUSTOMER 
 Route::post('/auth/send-otp', [AuthController::class, 'sendOtp']);
 Route::post('/auth/verify-otp', [AuthController::class, 'verifyOtp']);
 

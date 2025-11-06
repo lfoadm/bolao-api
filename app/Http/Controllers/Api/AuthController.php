@@ -17,8 +17,11 @@ class AuthController extends Controller
 
         $user = User::updateOrCreate(
             ['phone' => $request->phone],
-            ['name' => $request->name],
-            ['otp_code' => $otp, 'otp_expires_at' => Carbon::now()->addMinutes(5)]
+            [
+                'name' => $request->name,
+                'otp_code' => $otp,
+                'otp_expires_at' => Carbon::now()->addMinutes(5),
+            ]
         );
 
         // Aqui enviaria o OTP por WhatsApp

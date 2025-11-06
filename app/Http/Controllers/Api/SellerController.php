@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Seller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class SellerController extends Controller
 {
@@ -21,6 +22,12 @@ class SellerController extends Controller
      */
     public function store(Request $request)
     {
+        $user = Auth::user();
+
+        if (Seller::where('user_id', $user->id)->exists()) {
+            return response()->json(['message' => 'Você já é um vendedor.'], 400);
+        }
+
         $request->validate([
             'store_name' => 'required|string|max:100',
             'pix_key' => 'nullable|string|max:255',
