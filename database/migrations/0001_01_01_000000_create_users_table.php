@@ -13,15 +13,13 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            $table->string('name')->comment('Nome do usuário completo');
-            $table->string('phone')->comment('+55 adaptativo para padrão BR');
+            $table->string('name')->nullable();
+            $table->string('phone')->unique();
             $table->enum('type', ['seller', 'consumer', 'admin'])->default('consumer');
             $table->string('pix_key')->nullable();
-            $table->string('password');
+            $table->string('password')->nullable();
             $table->string('otp_code')->nullable();
-            $table->datetime('otp_expires_at')->nullable();
-            $table->timestamp('email_verified_at')->nullable();
-            $table->rememberToken();
+            $table->timestamp('otp_expires_at')->nullable();
             $table->timestamps();
         });
 
