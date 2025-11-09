@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Seller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class SellerController extends Controller
 {
@@ -28,23 +29,42 @@ class SellerController extends Controller
             return response()->json(['message' => 'Você já é um vendedor.'], 400);
         }
 
-        $request->validate([
+        $validated = $request->validate([
             'store_name' => 'required|string|max:100',
             'pix_key' => 'nullable|string|max:255',
             'bio' => 'nullable|string|max:255',
         ]);
 
-        $seller = Seller::create([
-            'user_id' => $request->user()->id,
-            'store_name' => $request->store_name,
-            'pix_key' => $request->pix_key,
-            'bio' => $request->bio,
-        ]);
+        DB::beginTransaction();
 
-        return response()->json([
-            'message' => 'Seller criado com sucesso!',
-            'seller' => $seller
-        ], 201);
+        try {
+            $seller = Seller::create([
+                'user_id' => $user->id,
+                'store_name' => $validated['store_name'],
+                'pix_key' => $validated['pix_key'] ?? null,
+                'bio' => $validated['bio'] ?? null,
+            ]);
+
+            $user->update([
+                'type' => 'seller',
+                'pix_key' => $validated['pix_key'] ?? null,
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Vendedor criado com sucesso!',
+                'seller' => $seller,
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Erro ao criar o vendedor.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

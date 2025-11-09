@@ -23,6 +23,7 @@ class Pool extends Model
         'commission',
         'entry_value',
         'status',
+        'theme',
         'is_active',
     ];
 

@@ -56,4 +56,38 @@ class AuthController extends Controller
 
         return response()->json(['token' => $token, 'user' => $user]);
     }
+
+    // Simula envio OTP (futuro: integrar Twilio, UltraMsg, etc.)
+    public function loginSendOtp(Request $request)
+    {
+        $request->validate([
+        'phone' => 'required',
+    ]);
+
+    // Verifica se o usuário existe
+    $user = User::where('phone', $request->phone)->first();
+
+    if (!$user) {
+        // Usuário não encontrado → redireciona para registro
+        return response()->json([
+            'message' => 'Telefone não cadastrado. Redirecionando para o registro...',
+        ], 404);
+    }
+
+    // Gera o código OTP e salva com expiração
+    $otp = rand(100000, 999999);
+
+    $user->update([
+        'otp_code' => $otp,
+        'otp_expires_at' => Carbon::now()->addMinutes(5),
+    ]);
+
+    // Aqui enviaria o OTP por WhatsApp
+    // WhatsAppService::send($user->phone, "Seu código é: $otp");
+
+    return response()->json([
+        'message' => 'OTP enviado com sucesso.',
+        // 'otp_code' => $otp, // ########### APAGAR APÓS TESTE ###########
+    ]);
+    }
 }

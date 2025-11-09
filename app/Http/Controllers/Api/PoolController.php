@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Pool;
 use App\Models\Seller;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -26,35 +27,52 @@ class PoolController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
+        // Validação
+        $validated = $request->validate([
+            'theme' => 'required|in:futebol,futsal',
             'team_a' => 'required|string|max:50',
             'team_b' => 'required|string|max:50',
-            'match_date' => 'required|date',
-            'deadline' => 'required|date|before:match_date',
+            'match_date' => 'required|date|after:now',
             'title' => 'required|string|max:100',
             'rules' => 'nullable|string',
             'commission' => 'nullable|numeric|min:0|max:100',
             'entry_value' => 'required|numeric|min:1',
+            'image' => 'nullable|string',
         ]);
 
-        // Buscar o seller vinculado ao user logado
-        $seller = Seller::where('user_id', $request->user()->id)->firstOrFail();
+        // Obter seller autenticado
+        $user = Auth::user();
+        $seller = Seller::where('user_id', $user->id)->firstOrFail();
 
+        // Calcular deadline: 15 min antes da partida
+        $matchDate = Carbon::parse($validated['match_date']);
+        $deadline = $matchDate->copy()->subMinutes(15);
+
+        // Definir imagem padrão conforme o tema
+        $image = match ($validated['theme']) {
+            'futebol' => 'futebol.jpg',
+            'futsal' => 'futsal.jpg',
+            default => 'default.jpg',
+        };
+
+        // Criar Pool
         $pool = Pool::create([
             'seller_id' => $seller->id,
-            'team_a' => $request->team_a,
-            'team_b' => $request->team_b,
-            'match_date' => $request->match_date,
-            'deadline' => $request->deadline,
-            'title' => $request->title,
-            'rules' => $request->rules,
-            'commission' => $request->commission ?? 10,
-            'entry_value' => $request->entry_value,
+            'theme' => $validated['theme'],
+            'team_a' => $validated['team_a'],
+            'team_b' => $validated['team_b'],
+            'match_date' => $matchDate,
+            'deadline' => $deadline,
+            'title' => $validated['title'],
+            'rules' => $validated['rules'] ?? null,
+            'commission' => $validated['commission'] ?? 10,
+            'entry_value' => $validated['entry_value'],
+            'image' => $image,
         ]);
 
         return response()->json([
             'message' => 'Bolão criado com sucesso!',
-            'pool' => $pool
+            'pool' => $pool,
         ], 201);
     }
 

@@ -16,6 +16,7 @@ Route::get('/user', function (Request $request) {
 # CUSTOMER 
 Route::post('/auth/send-otp', [AuthController::class, 'sendOtp']);
 Route::post('/auth/verify-otp', [AuthController::class, 'verifyOtp']);
+Route::post('/auth/login/send-otp', [AuthController::class, 'loginSendOtp']);
 
 // Rotas protegidas (apenas usuários logados via Sanctum)
 Route::middleware('auth:sanctum')->group(function () {
