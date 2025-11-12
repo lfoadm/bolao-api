@@ -87,7 +87,7 @@ class AuthController extends Controller
 
     return response()->json([
         'message' => 'OTP enviado com sucesso.',
-        // 'otp_code' => $otp, // ########### APAGAR APÓS TESTE ###########
+        'otp_code' => $otp, // ########### APAGAR APÓS TESTE ###########
     ]);
     }
 }

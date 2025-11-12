@@ -8,18 +8,22 @@ use App\Models\Seller;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class PoolController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(
-            Pool::with('seller.user')
-                ->where('is_active', true)
-                ->where('status', 'open')
-                ->orderBy('deadline', 'asc')
-                ->get()
-        );
+        $user = $request->user();
+
+        $pools = Pool::with(['seller.user'])
+        ->withCount('bets') // adiciona bets_count automaticamente
+        ->where('is_active', true)
+        ->whereHas('seller', fn($q) => $q->where('user_id', $user->id))
+        ->orderBy('deadline', 'asc')
+        ->get();
+
+        return response()->json($pools);
     }
 
     /**

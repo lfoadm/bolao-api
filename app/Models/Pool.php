@@ -78,4 +78,14 @@ class Pool extends Model
             ]);
         }
     }
+
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    public function scopeOwnedByUser($query, $userId)
+    {
+        return $query->whereHas('seller', fn ($q) => $q->where('user_id', $userId));
+    }
 }
