@@ -24,7 +24,10 @@ return new class extends Migration
             // Status e controle
             $table->boolean('is_winner')->default(false);
             $table->decimal('amount_paid', 10, 2)->default(0);
+            $table->decimal('winner_value', 10, 2)->default(0);
             $table->enum('status', ['pending', 'paid', 'progress', 'lost'])->default('pending');
+            $table->boolean('is_prize_claimed')->default(false);
+
             $table->timestamps();
         });
     }

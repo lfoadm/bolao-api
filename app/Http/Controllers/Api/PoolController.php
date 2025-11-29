@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Fee;
+use App\Models\Game;
 use App\Models\Pool;
 use App\Models\Seller;
 use Carbon\Carbon;
@@ -12,105 +14,136 @@ use Illuminate\Support\Facades\Log;
 
 class PoolController extends Controller
 {
+    /**
+     * Listar todos os bolões do seller autenticado
+     */
     public function index(Request $request)
     {
-        $user = $request->user();
+        // Garantir que o usuário tem seller vinculado
+        $seller = Seller::where('user_id', $request->user()->id)->first();
 
-        $pools = Pool::with(['seller.user'])
-        ->withCount('bets') // adiciona bets_count automaticamente
-        ->where('is_active', true)
-        ->whereHas('seller', fn($q) => $q->where('user_id', $user->id))
-        ->orderBy('deadline', 'asc')
-        ->get();
+        if (!$seller) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Nenhum vendedor encontrado para este usuário.',
+                'data' => []
+            ], 404);
+        }
 
-        return response()->json($pools);
+        // Buscar bolões do seller
+        $pools = Pool::with([
+                'game:id,team_a,team_b,match_datetime,is_finished,final_score_a,final_score_b',
+                'seller:id,user_id'
+            ])
+            ->withCount('bets')
+            ->where('seller_id', $seller->id)
+            ->orderByDesc('created_at')
+            // OU → mais recomendado: ordenar pela data do jogo
+            // ->orderBy(Game::select('match_datetime')->whereColumn('games.id', 'pools.game_id'))
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Lista de bolões carregada com sucesso.',
+            'data' => $pools
+        ]);
     }
 
+
     /**
-     * Criar um novo bolão (apenas seller autenticado)
+     * Criar um bolão baseado em um GAME já cadastrado
      */
     public function store(Request $request)
     {
-        // Validação
         $validated = $request->validate([
-            'theme' => 'required|in:futebol,futsal',
-            'team_a' => 'required|string|max:50',
-            'team_b' => 'required|string|max:50',
-            'match_date' => 'required|date|after:now',
-            'title' => 'required|string|max:100',
-            'rules' => 'nullable|string',
-            'commission' => 'nullable|numeric|min:0|max:100',
-            'entry_value' => 'required|numeric|min:1',
-            'image' => 'nullable|string',
+            'game_id'             => 'required|exists:games,id',
+            'entry_value'         => 'required|numeric|min:1',
+            // 'commission'          => 'nullable|integer|min:0|max:8',
+            'title'               => 'required|string|max:100',
+            'rules'               => 'nullable|string',
         ]);
 
-        // Obter seller autenticado
-        $user = Auth::user();
-        $seller = Seller::where('user_id', $user->id)->firstOrFail();
+        // seller autenticado
+        $seller = Seller::where('user_id', Auth::id())->firstOrFail();
 
-        // Calcular deadline: 15 min antes da partida
-        $matchDate = Carbon::parse($validated['match_date']);
-        $deadline = $matchDate->copy()->subMinutes(15);
+        // busca game
+        $game = Game::findOrFail($validated['game_id']);
 
-        // Definir imagem padrão conforme o tema
-        $image = match ($validated['theme']) {
-            'futebol' => 'futebol.jpg',
-            'futsal' => 'futsal.jpg',
-            default => 'default.jpg',
-        };
+        // busca taxa global da plataforma
+        $taxa = Fee::where('is_active')->first();
+        $platformFee = $taxa ? $taxa->platform_fee_percent : 5; // padrão 5%
 
-        // Criar Pool
+        // cria o pool
         $pool = Pool::create([
-            'seller_id' => $seller->id,
-            'theme' => $validated['theme'],
-            'team_a' => $validated['team_a'],
-            'team_b' => $validated['team_b'],
-            'match_date' => $matchDate,
-            'deadline' => $deadline,
-            'title' => $validated['title'],
-            'rules' => $validated['rules'] ?? null,
-            'commission' => $validated['commission'] ?? 10,
-            'entry_value' => $validated['entry_value'],
-            'image' => $image,
+            'seller_id'          => $seller->id,
+            'game_id'            => $game->id,
+            'title'              => $validated['title'],
+            'rules'              => $validated['rules'] ?? null,
+            'entry_value'        => $validated['entry_value'],
+            'commission'         => 8,
+            'platform_fee'       => $platformFee, // sempre percentual (ex: 5 = 5%)
+            'status'             => 'open',
         ]);
 
         return response()->json([
             'message' => 'Bolão criado com sucesso!',
-            'pool' => $pool,
+            'pool'    => $pool->load('game', 'seller'),
         ], 201);
     }
 
     /**
-     * Atualizar resultado do jogo e definir vencedores
-     */
-    public function update(Request $request, Pool $pool)
-    {
-        $request->validate([
-            'score_team_a' => 'required|integer|min:0',
-            'score_team_b' => 'required|integer|min:0',
-        ]);
-
-        $pool->update([
-            'score_team_a' => $request->score_team_a,
-            'score_team_b' => $request->score_team_b,
-            'status' => 'finished',
-            'is_active' => false,
-        ]);
-
-        // Verificar vencedores
-        $pool->checkWinners();
-
-        return response()->json([
-            'message' => 'Resultado atualizado e vencedores definidos!',
-            'pool' => $pool->load('bets.user'),
-        ]);
-    }
-
-    /**
-     * Exibir detalhes do bolão (com apostas)
+     * Exibir um bolão específico
      */
     public function show(Pool $pool)
     {
-        return response()->json($pool->load('seller.user', 'bets.user'));
+        return response()->json(
+            $pool->load('game', 'seller', 'bets.user')
+        );
     }
+
+    /**
+     * Fechar manualmente um bolão (opcional)
+     */
+    public function close(Pool $pool)
+    {
+        if ($pool->status !== 'open') {
+            return response()->json([
+                'message' => 'Este bolão já está fechado ou finalizado.'
+            ], 400);
+        }
+
+        $pool->update(['status' => 'closed']);
+
+        return response()->json([
+            'message' => 'Bolão fechado com sucesso.',
+            'pool' => $pool
+        ]);
+    }
+
+    public function destroy($id)
+    {
+        // Busca o pool
+        $pool = Pool::withCount('bets')->find($id);
+
+        if (!$pool) {
+            return response()->json([
+                'message' => 'Bolão não encontrado.'
+            ], 404);
+        }
+
+        // Verifica se já existem apostas
+        if ($pool->bets_count > 0) {
+            return response()->json([
+                'message' => 'NÃO SEJA MALANDRO! Esse bolão já tem apostas e não pode ser excluído.'
+            ], 400);
+        }
+
+        // Pode excluir
+        $pool->delete();
+
+        return response()->json([
+            'message' => 'Bolão excluído com sucesso.'
+        ], 200);
+    }
+
 }

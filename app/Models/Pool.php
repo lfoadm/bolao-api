@@ -11,81 +11,97 @@ class Pool extends Model
     use HasFactory;
 
     protected $fillable = [
+        'game_id',
         'seller_id',
-        'team_a',
-        'team_b',
-        'match_date',
-        'deadline',
-        'score_team_a',
-        'score_team_b',
-        'title',
-        'rules',
-        'commission',
         'entry_value',
-        'status',
-        'theme',
+        'commission',
+        'platform_fee',
         'is_active',
+        'title',
+        'status',
+        'winner_count',
+        'total_bets',
     ];
 
     protected $casts = [
-        'match_date' => 'datetime',
-        'deadline' => 'datetime',
+        'entry_value' => 'decimal:2',
+        'commission' => 'decimal:2',
+        'platform_fee' => 'decimal:2',
         'is_active' => 'boolean',
     ];
 
-    /**
-     * Um Pool pertence a um Seller (criador do bolão).
-     */
-    public function seller()
+    protected $appends = [
+        'current_prize'
+    ];
+
+    // -----------------------------------
+    // RELACIONAMENTOS
+    // -----------------------------------
+
+    public function game()
     {
-        return $this->belongsTo(Seller::class);
+        return $this->belongsTo(Game::class);
     }
 
-    /**
-     * Um Pool possui várias apostas (Bets).
-     */
+    public function seller()
+    {
+        return $this->belongsTo(Seller::class); // ou User, dependendo
+    }
+
     public function bets()
     {
         return $this->hasMany(Bet::class);
     }
 
-    /**
-     * Retorna os vencedores do bolão.
-     */
-    public function winners()
+    // -----------------------------------
+    // ACESSOR DO PRÊMIO ATUALIZADO
+    // -----------------------------------
+
+    public function getCurrentPrizeAttribute()
     {
-        return $this->bets()->where('is_winner', true);
+        $totalPalpites = $this->bets()->count(); //2
+        $valorCota = $this->entry_value;
+        
+        $totalArrecadado = $totalPalpites * $valorCota;
+
+        $commissionSeller = $this->commission / 100; // Converte comissão percentual (ex: 15 vira 0.15)
+        $commissionPlatform = $this->platform_fee / 100; // Converte comissão percentual (ex: 15 vira 0.15)
+
+        // Calcula valores
+        $commissionSellerAmount     = $totalArrecadado * $commissionSeller;
+        $commissionPlatformAmount   = $totalArrecadado * $commissionPlatform;
+
+        // Fórmula final do prêmio líquido
+        $netPrize = max(0, 
+            $totalArrecadado - ($commissionSellerAmount + $commissionPlatformAmount)
+        );
+
+        return round($netPrize, 2);
     }
 
-    /**
-     * Verifica o resultado e define vencedores.
-     */
-    public function checkWinners(): void
+    public function getDeadlineAttribute()
     {
-        if (is_null($this->score_team_a) || is_null($this->score_team_b)) {
-            return; // resultado ainda não informado
+        // Se não houver jogo associado, evita erro
+        if (!$this->game || !$this->game->match_datetime) {
+            return null;
         }
 
-        foreach ($this->bets as $bet) {
-            $isWinner = (
-                $bet->bet_team_a === $this->score_team_a &&
-                $bet->bet_team_b === $this->score_team_b
-            );
-
-            $bet->update([
-                'is_winner' => $isWinner,
-                'status' => $isWinner ? 'paid' : 'lost',
-            ]);
-        }
+        // Calcula 15 min antes do horário da partida
+        return \Illuminate\Support\Carbon::parse($this->game->match_datetime)
+            ->subMinutes(15);
     }
 
-    public function scopeActive($query)
+    // -----------------------------------
+    // STATUS
+    // -----------------------------------
+
+    public function isOpen(): bool
     {
-        return $query->where('is_active', true);
+        return $this->is_active && !$this->game->isMatchFinished();
     }
 
-    public function scopeOwnedByUser($query, $userId)
+    public function isFinished(): bool
     {
-        return $query->whereHas('seller', fn ($q) => $q->where('user_id', $userId));
+        return !$this->is_active || $this->game->isMatchFinished();
     }
 }

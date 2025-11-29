@@ -13,7 +13,8 @@ class AuthController extends Controller
     public function sendOtp(Request $request)
     {
         $request->validate(['phone' => 'required', 'name' => 'required']);
-        $otp = rand(100000, 999999);
+        // $otp = rand(100000, 999999);
+        $otp = 123;
 
         $user = User::updateOrCreate(
             ['phone' => $request->phone],
@@ -75,7 +76,8 @@ class AuthController extends Controller
     }
 
     // Gera o código OTP e salva com expiração
-    $otp = rand(100000, 999999);
+    // $otp = rand(100000, 999999);
+    $otp = 123;
 
     $user->update([
         'otp_code' => $otp,

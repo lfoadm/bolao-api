@@ -12,28 +12,40 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('pools', function (Blueprint $table) {
+            // $table->id();
+            // $table->foreignId('seller_id')->constrained()->onDelete('cascade');
+            // $table->foreignId('game_id')->constrained()->onDelete('cascade');
+            
+            // // Informações internas do bolão
+            // $table->decimal('entry_value', 10, 2)->default(0);
+            // $table->decimal('commission', 10, 2)->default(0); // calculado
+            // $table->decimal('platform_fee', 10, 2)->default(0); // buscado da tabela taxas
+            
+            // // Dados gerais do bolão
+            // $table->string('title')->comment('Nome da partida');
+            // $table->text('rules')->nullable()->comment('Regras individuais do seller');
+            // $table->enum('status', ['open', 'closed', 'finished'])->default('open');
+            // $table->timestamps();
+
             $table->id();
+
+            // Relacionamentos
             $table->foreignId('seller_id')->constrained()->onDelete('cascade');
+            $table->foreignId('game_id')->constrained()->onDelete('cascade');
 
-            // Jogo
-            $table->enum('theme', ['futebol', 'futsal'])->nullable();
-            $table->string('team_a');
-            $table->string('team_b');
-            $table->dateTime('match_date')->nullable()->comment('Data e hora da partida');
-            $table->dateTime('deadline')->nullable()->comment('Data e hora limite para apostar');
+            // Finanças
+            $table->decimal('entry_value', 10, 2)->default(0);
+            $table->decimal('commission', 10, 2)->default(8); // calculado
+            $table->decimal('platform_fee', 10, 2)->default(0); // da tabela taxas
 
-            // Resultado oficial (inserido após o jogo)
-            $table->unsignedTinyInteger('score_team_a')->nullable();
-            $table->unsignedTinyInteger('score_team_b')->nullable();
-
-            // Dados gerais do bolão
-            $table->string('image')->nullable();
+            // Informações do bolão
             $table->string('title')->comment('Nome da partida');
             $table->text('rules')->nullable()->comment('Regras individuais do seller');
-            $table->decimal('commission', 5, 2)->default(10)->comment('Percentual de comissão do seller');
-            $table->decimal('entry_value', 10, 2)->comment('Valor da aposta');
             $table->enum('status', ['open', 'closed', 'finished'])->default('open');
-            $table->boolean('is_active')->default(true);
+
+            // Estatísticas após finalizar o jogo
+            $table->unsignedInteger('winner_count')->nullable()->comment('Quantos apostadores acertaram o placar');
+            $table->unsignedInteger('total_bets')->nullable()->comment('Quantidade total de apostas no pool');
 
             $table->timestamps();
         });
